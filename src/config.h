@@ -53,16 +53,16 @@
 //          D6=GPIO21, D7=GPIO20, D8=GPIO8, D9=GPIO9, D10=GPIO10.
 // These defines use GPIO numbers directly.
 #ifndef EPAPER_CS
-#  define EPAPER_CS    7    // GPIO7 = D5 on XIAO C3
+#  define EPAPER_CS    3    // GPIO3 = D1 on XIAO C3 — verified against Seeed ESPHome wiki
 #endif
 #ifndef EPAPER_DC
-#  define EPAPER_DC    3    // GPIO3 = D1
+#  define EPAPER_DC    5    // GPIO5 = D3
 #endif
 #ifndef EPAPER_RST
-#  define EPAPER_RST   5    // GPIO5 = D3
+#  define EPAPER_RST   2    // GPIO2 = D0
 #endif
 #ifndef EPAPER_BUSY
-#  define EPAPER_BUSY  4    // GPIO4 = D2
+#  define EPAPER_BUSY  4    // GPIO4 = D2 (active low — GxEPD2 handles polarity internally)
 #endif
 
 // ── Data providers ────────────────────────────────────────────────────────────
