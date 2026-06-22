@@ -1,6 +1,9 @@
 # ePaperTicker
 
-An ESP32 firmware that turns a 7.5" ePaper display into a always-on stock ticker. Fetches live market data over WiFi, renders it to the display, then deep-sleeps until the next refresh — idle power draw is near zero.
+An ESP32 firmware that turns a 7.5" ePaper display into an always-on stock ticker. Fetches live market data over WiFi, renders it to the display, then deep-sleeps until the next refresh — idle power draw is near zero.
+
+![Market overview screen](preview.png)
+*800×480 B/W simulator — market overview with index bar, ticker table, and 52-week range bars*
 
 ## Features
 
