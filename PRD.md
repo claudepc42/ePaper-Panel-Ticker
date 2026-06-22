@@ -43,7 +43,7 @@ Full-color refresh on this panel has been observed taking up to ~30 seconds, dra
 - Battery life claims/estimates shown anywhere in the portal UI must be board-specific, not a single shared number, given the 6-hour-reference-interval difference called out above.
 
 ### 2.4 Buttons (all boards)
-RESET restarts firmware as-is. BOOT-hold (duration TBD, suggest 3-5s) is the **sole** trigger for entering Config Mode, on all three boards. All boards have a physical on/off power switch — no soft-power/dual-duty button design needed.
+RESET restarts firmware as-is. BOOT-hold (confirmed: 4s) is the **sole** trigger for entering Config Mode, on all three boards. All boards have a physical on/off power switch — no soft-power/dual-duty button design needed.
 
 ### 2.5 Hardware Abstraction Layer (Required Architecture)
 Given three boards share a codebase, the firmware needs a clean separation:
@@ -66,7 +66,7 @@ On wake (timer or fresh boot with saved config):
 
 ### 3.2 Config Mode
 Entered only by holding BOOT for the confirmed duration. Device:
-1. Starts a SoftAP (e.g. SSID `XIAO-Ticker-Setup`)
+1. Starts a SoftAP (SSID `ePaperTicker-XXXX` where XXXX is a MAC-derived suffix)
 2. Runs a captive portal web server serving the settings UI (Section 8)
 3. On save: writes all settings to NVS, then restarts into Normal Mode
 
@@ -127,15 +127,9 @@ Shown only during the automatic First-Boot Mode (Section 3.3). Shows:
 - Instruction to connect from a phone, with fallback IP address if the captive portal doesn't auto-open
 
 ### 6.4 Display Hardware / Driver (Boards A & B — grayscale tier)
-The exact e-paper panel variant inside the **XIAO panel (Board A)** is unconfirmed (user does not want to disassemble the unit to check). Two known candidate panels share this 800×480 form factor and both have GxEPD2 library support with 4-gray driver variants:
-- Candidate A: GDEY075T7 / UC8179 controller
-- Candidate B: GDEW075T7 / EK79655 (GD7965) controller
+Both boards confirmed using `GxEPD2_750_T7` (GDEY075T7 / UC8179 controller). Board A first-boot confirmed: setup screen rendered correctly with `GxEPD2_BW<GxEPD2_750_T7, ...>` as the active driver class. The panel variant toggle (Section 5.2) remains in the portal as a fallback escape hatch — if a user's Board A panel turns out to be the EK79655 variant (GDEW075T7, `GxEPD2_750`), they can switch without reflashing. Default stays `GxEPD2_750_T7`.
 
-(Board B, the reTerminal E1001, is confirmed UC8179 directly from Seeed's own device list — no ambiguity there. This Section 6.4 ambiguity applies only to Board A.)
-
-**Resolution strategy for Board A:** compile both driver classes into firmware; select active one at runtime based on the "Display Panel Variant" NVS setting (Section 5.2), exposed in the portal's Advanced settings (Section 8.7). Default to Candidate A (GDEY075T7/UC8179) as the initial guess, since it's the more actively-referenced 4-gray target in GxEPD2 community usage. If the rendered output is wrong (inverted colors, mirrored image, garbled rows — these are the typical wrong-driver symptoms, not subtle), user flips the setting via the portal and restarts; no reflashing required.
-
-Note for implementation: confirm GxEPD2's actual class names for both variants before writing the rendering abstraction layer — names referenced here (GDEY075T7, GDEW075T7) are panel/controller identifiers from datasheets, not necessarily the literal C++ class names in the library.
+SPI pins confirmed for Board A (verified against Seeed ESPHome wiki): CS=GPIO3, DC=GPIO5, RST=GPIO2, BUSY=GPIO4.
 
 ### 6.5 Color Constraints (Boards A & B — grayscale tier only)
 All e-paper rendering on Boards A and B must use flat fills only across exactly 4 tones (pure black, dark gray, light gray, pure white) — no gradients, no antialiasing, no soft shadows. The display cannot blend between levels; crisp edges between tone regions only. This applies even though the existing design mockup (built in a phone/web context) uses soft antialiased grays and subtle shadows for preview purposes — those need to be flattened to the 4-tone constraint when translated into actual rendering code. **This constraint does not apply to Board C** — see Section 6.6.

@@ -41,7 +41,7 @@ pio device monitor -p COM4 -b 115200
 pio device monitor -p COM5 -b 115200
 ```
 
-> **Windows note:** Board A uses the ESP32-C3's native USB. First-time setup requires installing the WinUSB driver for Interface 2 of the JTAG device (VID 303A, PID 1001) via [Zadig](https://zadig.akeo.ie). After that, flashing is automatic — no bootloader button sequence needed.
+> **Windows note:** Board A uses the ESP32-C3's native USB. No manual bootloader entry needed — `usb_reset` handles it automatically. If flashing fails with a `libusb_open` error, install the WinUSB driver for Interface 2 of the JTAG device (VID 303A, PID 1001) via [Zadig](https://zadig.akeo.ie).
 
 ## First boot
 
