@@ -58,11 +58,7 @@ FetchResult FinnhubProvider::fetchTicker(const char* symbol, TickerData& td) {
         td.hasDayHiLo = false;
     }
 
-    // TODO (PRD §11 item 7): Finnhub free tier does not appear to include 52w range
-    // in the /quote endpoint. Leaving as not-available; verify and add a second call
-    // to /stock/metric if it turns out to be accessible.
-    td.hasWeek52 = false;
-
+    td.hasHistory = false;  // populated separately via fetchTimeSeries
     td.valid = (td.price != 0.0f);
     return td.valid ? FetchResult::OK : FetchResult::PARSE_ERROR;
 }
@@ -90,14 +86,20 @@ FetchResult FinnhubProvider::fetchIndexSummary(IndexData idx[3]) {
         JsonDocument doc;
         if (deserializeJson(doc, body) != DeserializationError::Ok) continue;
 
-        idx[i].price     = doc["c"]  | 0.0f;
-        idx[i].change    = doc["d"]  | 0.0f;
-        idx[i].changePct = doc["dp"] | 0.0f;
-        idx[i].dayHigh   = doc["h"]  | 0.0f;
-        idx[i].dayLow    = doc["l"]  | 0.0f;
-        idx[i].valid     = (idx[i].price != 0.0f);
+        idx[i].price      = doc["c"]  | 0.0f;
+        idx[i].change     = doc["d"]  | 0.0f;
+        idx[i].changePct  = doc["dp"] | 0.0f;
+        idx[i].valid      = (idx[i].price != 0.0f);
+        idx[i].hasHistory = false;
     }
 
     return worst;
+}
+
+FetchResult FinnhubProvider::fetchTimeSeries(const char* symbol, float* out,
+                                              uint8_t count, const char* interval) {
+    (void)symbol; (void)interval;
+    for (uint8_t i = 0; i < count; i++) out[i] = 0.0f;
+    return FetchResult::OK;
 }
 

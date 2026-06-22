@@ -46,11 +46,10 @@ struct TickerData {
     float   changePct;
     float   dayHigh;
     float   dayLow;
-    float   week52High;
-    float   week52Low;
-    bool    valid;           // false if this field could not be populated
-    bool    hasWeek52;       // PRD §11 item 3: week52 may not be on free tier
+    float   history[15];    // 2h-interval closes, oldest→newest (~5 trading days)
+    bool    valid;
     bool    hasDayHiLo;
+    bool    hasHistory;
 };
 
 // ── Index data (SPX / NASDAQ / DOW) ──────────────────────────────────────────
@@ -61,9 +60,9 @@ struct IndexData {
     float   price;
     float   change;
     float   changePct;
-    float   dayHigh;
-    float   dayLow;
+    float   history[6];     // 1h-interval closes, oldest→newest (rolling 6hrs)
     bool    valid;
+    bool    hasHistory;
 };
 
 // ── Device configuration (NVS-persisted) ─────────────────────────────────────

@@ -161,9 +161,17 @@ static bool fetchAllTickers(IDataProvider* provider, const DeviceConfig& cfg,
             continue;
         }
 
+        FetchResult hr = provider->fetchTimeSeries(cfg.tickers[i].symbol,
+                                                   td.history, 15, "2h");
+        td.hasHistory = (hr == FetchResult::OK);
+        if (!td.hasHistory) {
+            Serial.printf("[Fetch] %s: history error %d\n", cfg.tickers[i].symbol, (int)hr);
+        }
+
         cache.tickers[cache.count++] = td;
         anyOk = true;
-        Serial.printf("[Fetch] %s: $%.2f  %+.2f%%\n", td.symbol, td.price, td.changePct);
+        Serial.printf("[Fetch] %s: $%.2f  %+.2f%%  hist:%s\n",
+                      td.symbol, td.price, td.changePct, td.hasHistory ? "ok" : "no");
     }
 
     return anyOk;

@@ -131,18 +131,25 @@ void NVSManager::loadCache(CachedTickerSet& cache) {
         if (deserializeJson(cDoc, cacheJson) != DeserializationError::Ok) continue;
 
         TickerData& td = cache.tickers[cache.count++];
-        strlcpy(td.symbol,   cDoc["sym"]  | sym,  sizeof(td.symbol));
-        strlcpy(td.name,     cDoc["name"] | "",    sizeof(td.name));
-        td.price      = cDoc["price"]   | 0.0f;
-        td.change     = cDoc["chg"]     | 0.0f;
-        td.changePct  = cDoc["chgPct"]  | 0.0f;
-        td.dayHigh    = cDoc["dayH"]    | 0.0f;
-        td.dayLow     = cDoc["dayL"]    | 0.0f;
-        td.week52High = cDoc["w52H"]    | 0.0f;
-        td.week52Low  = cDoc["w52L"]    | 0.0f;
-        td.hasWeek52  = cDoc["hasW52"]  | false;
-        td.hasDayHiLo = cDoc["hasDHL"]  | false;
-        td.valid      = true;
+        strlcpy(td.symbol,  cDoc["sym"]  | sym, sizeof(td.symbol));
+        strlcpy(td.name,    cDoc["name"] | "",  sizeof(td.name));
+        td.price      = cDoc["price"]  | 0.0f;
+        td.change     = cDoc["chg"]    | 0.0f;
+        td.changePct  = cDoc["chgPct"] | 0.0f;
+        td.dayHigh    = cDoc["dayH"]   | 0.0f;
+        td.dayLow     = cDoc["dayL"]   | 0.0f;
+        td.hasDayHiLo = cDoc["hasDHL"] | false;
+        td.hasHistory = false;
+
+        JsonArray hist = cDoc["hist"].as<JsonArray>();
+        if (!hist.isNull()) {
+            uint8_t n = (uint8_t)min((int)hist.size(), 15);
+            for (uint8_t j = 0; j < n; j++) td.history[j] = hist[j] | 0.0f;
+            for (uint8_t j = n; j < 15; j++) td.history[j] = 0.0f;
+            td.hasHistory = (n > 0);
+        }
+
+        td.valid = true;
     }
 
     prefs.end();
@@ -165,10 +172,11 @@ void NVSManager::saveCache(const CachedTickerSet& cache) {
         doc["chgPct"] = td.changePct;
         doc["dayH"]   = td.dayHigh;
         doc["dayL"]   = td.dayLow;
-        doc["w52H"]   = td.week52High;
-        doc["w52L"]   = td.week52Low;
-        doc["hasW52"] = td.hasWeek52;
         doc["hasDHL"] = td.hasDayHiLo;
+        if (td.hasHistory) {
+            JsonArray hist = doc["hist"].to<JsonArray>();
+            for (uint8_t j = 0; j < 15; j++) hist.add(td.history[j]);
+        }
 
         String json;
         serializeJson(doc, json);

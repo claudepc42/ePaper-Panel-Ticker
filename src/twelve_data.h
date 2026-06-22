@@ -18,15 +18,14 @@ public:
     void setApiKey(const char* key) override;
     FetchResult fetchTicker(const char* symbol, TickerData& td) override;
     FetchResult fetchIndexSummary(IndexData idx[3]) override;
+    FetchResult fetchTimeSeries(const char* symbol, float* out,
+                                uint8_t count, const char* interval) override;
     const char* name() const override { return "Twelve Data"; }
 
 private:
     char _apiKey[128];
 
-    // Makes HTTPS GET to Twelve Data and returns the body, or empty string on error.
-    // Sets *httpCode to the HTTP status code.
     String _get(const String& path, int* httpCode);
-
-    // Parse a single "quote" JSON response into TickerData.
     FetchResult _parseQuote(const String& body, TickerData& td);
+    FetchResult _parseTimeSeries(const String& body, float* out, uint8_t count);
 };

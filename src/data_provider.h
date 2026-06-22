@@ -35,6 +35,12 @@ public:
     // Implementations that can't supply these should set idx[n].valid = false.
     virtual FetchResult fetchIndexSummary(IndexData idx[3]) = 0;
 
+    // Fetch historical closing prices for sparkline rendering.
+    // out[]: filled oldest→newest, length count, interval e.g. "1h" or "2h".
+    // Providers that don't support time series should zero out[] and return OK.
+    virtual FetchResult fetchTimeSeries(const char* symbol, float* out,
+                                        uint8_t count, const char* interval) = 0;
+
     // Human-readable provider name for display in portal/logs.
     virtual const char* name() const = 0;
 };

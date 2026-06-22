@@ -18,6 +18,8 @@ public:
     void setApiKey(const char* key) override;
     FetchResult fetchTicker(const char* symbol, TickerData& td) override;
     FetchResult fetchIndexSummary(IndexData idx[3]) override;
+    FetchResult fetchTimeSeries(const char* symbol, float* out,
+                                uint8_t count, const char* interval) override;
     const char* name() const override { return "Finnhub"; }
 
 private:

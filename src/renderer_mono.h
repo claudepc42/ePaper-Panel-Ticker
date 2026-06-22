@@ -66,7 +66,7 @@ private:
     static constexpr int COL_PRICE = MX + 264;    // 282 — PRICE   (94px)
     static constexpr int COL_CHG   = MX + 362;    // 380 — DAY CHG (86px)
     static constexpr int COL_HL    = MX + 452;    // 470 — DAY H/L (162px)
-    static constexpr int COL_W52   = MX + 618;    // 636 — 52W     (146px)
+    static constexpr int COL_TREND = MX + 618;    // 636 — 15 DAY TREND (146px)
 
     // ── Helpers ──────────────────────────────────────────────────────────────
     void _drawSharedHeader(const char* title, const char* dateStr,
@@ -74,16 +74,20 @@ private:
 
     void _drawIndexColumn(int colX, const IndexData& idx);
 
-    void _drawTableHeader(bool showW52, bool showHL);
+    void _drawTableHeader(bool showHL);
 
-    void _drawTickerRow(int y, const TickerData& td, bool showW52, bool showHL);
+    void _drawTickerRow(int y, const TickerData& td, bool showHL);
+
+    // Draw a normalized bar chart using fillRect. vals[]: oldest→newest.
+    // Bars grow upward from y+h; min value → 12.5% height, max → 100%.
+    void _drawSparkBars(int x, int y, int w, int h,
+                        const float* vals, uint8_t count, uint16_t color);
 
     void _drawFooter(time_t fetchedAt, const char* note = nullptr);
 
     // Format helpers
     static String _fmtPrice(float v);
     static String _fmtRange(float hi, float lo);
-    static String _fmtW52Bar(float price, float hi, float lo);
     static String _fmtTime(time_t t);
     static String _fmtDate(time_t t);
 

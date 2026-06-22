@@ -3,13 +3,15 @@
 An ESP32 firmware that turns a 7.5" ePaper display into an always-on stock ticker. Fetches live market data over WiFi, renders it to the display, then deep-sleeps until the next refresh — idle power draw is near zero.
 
 ![Market overview screen](preview.png)
-*800×480 B/W simulator — market overview with index bar, ticker table, and 52-week range bars*
+*800×480 B/W simulator — market overview with index rolling bar charts and 15-day trend sparklines*
 
 ## Features
 
 - **Captive portal setup** — connect to the device's WiFi hotspot, configure your network credentials, data provider API key, and tickers through a browser. No app required.
 - **Two data providers** — Finnhub or Twelve Data (switchable in the portal)
 - **API key validation** — the portal tests your key against a real fetch before letting you save
+- **15-day trend sparklines** — each ticker row shows a bar chart of the past ~5 trading days (2-hour intervals), so trend direction is visible at a glance
+- **Rolling index bar charts** — each index panel shows a 6-hour rolling price chart with live high/low labels
 - **Rotation bank** — up to 5 ticker rows on screen at once; individual rows can rotate through a bank of additional tickers each refresh cycle
 - **NVS persistence** — config and data cache survive power cycles
 - **Graceful degradation** — shows cached data if WiFi or the API is unavailable

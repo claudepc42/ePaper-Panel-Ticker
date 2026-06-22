@@ -33,16 +33,33 @@ String MonoRenderer::_fmtRange(float hi, float lo) {
     return String(buf);
 }
 
-String MonoRenderer::_fmtW52Bar(float price, float hi, float lo) {
-    if (hi <= lo) return String("--");
-    int n = 8;
-    int p = constrain((int)(((price - lo) / (hi - lo)) * n + 0.5f), 0, n);
-    String bar = "|";
-    for (int i = 0; i < n; i++) bar += (i < p) ? '#' : '-';
-    bar += "| ";
-    char buf[12];
-    snprintf(buf, sizeof(buf), "%d/%d", (int)hi, (int)lo);
-    return bar + buf;
+void MonoRenderer::_drawSparkBars(int x, int y, int w, int h,
+                                   const float* vals, uint8_t count, uint16_t color) {
+    if (count == 0 || w <= 0 || h <= 0) return;
+
+    float mn = vals[0], mx = vals[0];
+    for (uint8_t i = 1; i < count; i++) {
+        if (vals[i] < mn) mn = vals[i];
+        if (vals[i] > mx) mx = vals[i];
+    }
+    float rng = mx - mn;
+    if (rng == 0.0f) rng = 1.0f;
+
+    // Equal bar widths with 1px gaps. Distribute remainder to leading bars.
+    int barW    = (w - (int)(count - 1)) / (int)count;
+    if (barW < 1) barW = 1;
+    int leftover = w - (barW * (int)count + (int)(count - 1));
+
+    int bx = x;
+    for (uint8_t i = 0; i < count; i++) {
+        int thisW = barW + (i < leftover ? 1 : 0);
+        float pct = ((vals[i] - mn) / rng) * 87.5f + 12.5f;
+        int barH  = (int)(pct / 100.0f * (float)h + 0.5f);
+        if (barH < 1) barH = 1;
+        if (barH > h) barH = h;
+        _gfx->fillRect(bx, y + h - barH, thisW, barH, color);
+        bx += thisW + 1;
+    }
 }
 
 String MonoRenderer::_fmtTime(time_t t) {
@@ -153,29 +170,60 @@ void MonoRenderer::_drawIndexColumn(int colX, const IndexData& idx) {
     _gfx->setCursor(x, IDX_Y + 93);
     _gfx->print(chgBuf);
 
-    // Day bar
-    _gfx->setFont(&FreeMonoBold9pt7b);
-    _gfx->setTextColor(MID);
-    if (idx.dayHigh != 0 && idx.dayLow != 0) {
-        // _fmtW52Bar already appends "hi/lo" — print just the bar to avoid double-printing
-        _gfx->setCursor(x, IDX_Y + 110);
-        _gfx->print(_fmtW52Bar(idx.price, idx.dayHigh, idx.dayLow));
+    // Rolling 6-hour bar chart: "H xxxx [bars] L xxxx  6hrs"
+    if (idx.hasHistory) {
+        float mn = idx.history[0], mx = idx.history[0];
+        for (int j = 1; j < 6; j++) {
+            if (idx.history[j] < mn) mn = idx.history[j];
+            if (idx.history[j] > mx) mx = idx.history[j];
+        }
+
+        char hBuf[12], lBuf[12];
+        if (mx >= 1000.0f) snprintf(hBuf, sizeof(hBuf), "H %.0f", mx);
+        else                snprintf(hBuf, sizeof(hBuf), "H %.2f", mx);
+        if (mn >= 1000.0f) snprintf(lBuf, sizeof(lBuf), "L %.0f", mn);
+        else                snprintf(lBuf, sizeof(lBuf), "L %.2f", mn);
+
+        _gfx->setFont(&FreeMonoBold9pt7b);
+        _gfx->setTextColor(MID);
+
+        // Bar row: 9px tall. Text baseline aligns with bar bottom.
+        int baseline = IDX_Y + 110;
+        int barTop   = baseline - 9;
+        int cx = x;
+
+        _gfx->setCursor(cx, baseline);
+        _gfx->print(hBuf);
+        int16_t tx, ty; uint16_t tw, th;
+        _gfx->getTextBounds(hBuf, cx, baseline, &tx, &ty, &tw, &th);
+        cx += (int)tw + 3;
+
+        _drawSparkBars(cx, barTop, 60, 9, idx.history, 6, MID);
+        cx += 60 + 3;
+
+        _gfx->setCursor(cx, baseline);
+        _gfx->print(lBuf);
+        _gfx->getTextBounds(lBuf, cx, baseline, &tx, &ty, &tw, &th);
+        cx += (int)tw + 3;
+
+        _gfx->setCursor(cx, baseline);
+        _gfx->print("6hrs");
     }
 }
 
 // ── Table header ──────────────────────────────────────────────────────────────
 
-void MonoRenderer::_drawTableHeader(bool showW52, bool showHL) {
+void MonoRenderer::_drawTableHeader(bool showHL) {
     _gfx->setFont(&FreeMonoBold9pt7b);
     _gfx->setTextColor(DARK);
     int y = TBL_Y + 16;
 
     _gfx->setCursor(COL_TICK,  y); _gfx->print("TICKER");
     _gfx->setCursor(COL_FUND,  y); _gfx->print("FUND");
-    _printRight("PRICE",   COL_PRICE + 94, y);
-    _printRight("DAY CHG", COL_CHG   + 86, y);
-    if (showHL)  _printCenter("DAY H / L",  COL_HL,  COL_HL + 162, y);
-    if (showW52) _printCenter("52W RANGE",  COL_W52, COL_W52 + 146, y);
+    _printRight("PRICE",        COL_PRICE + 94, y);
+    _printRight("DAY CHG",      COL_CHG   + 86, y);
+    if (showHL) _printCenter("DAY H / L",   COL_HL,    COL_HL    + 162, y);
+    _printCenter("15 DAY TREND", COL_TREND, COL_TREND + 146, y);
 
     _gfx->drawLine(MX, TBL_LINE_Y, W - MX, TBL_LINE_Y, INK);
     _gfx->drawLine(MX, TBL_LINE_Y + 1, W - MX, TBL_LINE_Y + 1, INK);
@@ -183,7 +231,7 @@ void MonoRenderer::_drawTableHeader(bool showW52, bool showHL) {
 
 // ── Ticker data row ───────────────────────────────────────────────────────────
 
-void MonoRenderer::_drawTickerRow(int y, const TickerData& td, bool showW52, bool showHL) {
+void MonoRenderer::_drawTickerRow(int y, const TickerData& td, bool showHL) {
     int baseline = y + ROW_H - 16;   // text baseline within row
 
     if (!td.valid) {
@@ -227,11 +275,10 @@ void MonoRenderer::_drawTickerRow(int y, const TickerData& td, bool showW52, boo
         _printCenter(_fmtRange(td.dayHigh, td.dayLow), COL_HL, COL_HL + 162, baseline);
     }
 
-    // 52W range bar
-    if (showW52 && td.hasWeek52) {
-        _gfx->setTextColor(MID);
-        _printCenter(_fmtW52Bar(td.price, td.week52High, td.week52Low),
-                     COL_W52, COL_W52 + 146, baseline);
+    // 15-day sparkline: 146px wide × 16px tall, vertically centered in row
+    if (td.hasHistory) {
+        int barY = y + (ROW_H - 16) / 2;
+        _drawSparkBars(COL_TREND, barY, 146, 16, td.history, 15, INK);
     }
 
     _gfx->drawLine(MX, y + ROW_H - 1, W - MX, y + ROW_H - 1, MID);
@@ -256,11 +303,9 @@ void MonoRenderer::_drawFooter(time_t fetchedAt, const char* note) {
 
 void MonoRenderer::drawMarketOverview(const IndexData indices[3], const TickerData* tickers,
                                       uint8_t tickerCount, time_t fetchedAt) {
-    // Determine which columns are available across all shown tickers
-    bool showW52 = false, showHL = false;
+    bool showHL = false;
     for (uint8_t i = 0; i < tickerCount; i++) {
-        if (tickers[i].hasWeek52)  showW52 = true;
-        if (tickers[i].hasDayHiLo) showHL  = true;
+        if (tickers[i].hasDayHiLo) showHL = true;
     }
 
     _gfx->setFullWindow();
@@ -281,11 +326,11 @@ void MonoRenderer::drawMarketOverview(const IndexData indices[3], const TickerDa
         _gfx->drawLine(MX, IDX_LINE_Y, W - MX, IDX_LINE_Y, MID);
 
         // Table
-        _drawTableHeader(showW52, showHL);
+        _drawTableHeader(showHL);
 
         uint8_t shown = min(tickerCount, (uint8_t)5);
         for (uint8_t i = 0; i < shown; i++) {
-            _drawTickerRow(ROWS_TOP + i * ROW_H, tickers[i], showW52, showHL);
+            _drawTickerRow(ROWS_TOP + i * ROW_H, tickers[i], showHL);
         }
 
         _drawFooter(fetchedAt);
