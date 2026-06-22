@@ -19,25 +19,29 @@ An ESP32 firmware that turns a 7.5" ePaper display into an always-on stock ticke
 | | Board A | Board B |
 |---|---|---|
 | MCU | Seeed XIAO ESP32-C3 | Seeed reTerminal E1001 |
-| Display | External 7.5" ePaper panel | Internal 7.5" mono ePaper |
-| Status | Abandoned (USB flashing issues on Windows) | **Active target** |
-
-Board B (reTerminal E1001) is the actively developed and tested target.
+| Display | Seeed 7.5" ePaper Panel (external) | Internal 7.5" mono ePaper |
+| Flash method | esptool via native USB (`usb_reset`) | esptool via CH340 UART |
+| Status | **Working** | **Working** |
 
 ## Building
 
 Requires [PlatformIO](https://platformio.org/).
 
 ```bash
+# Board A (XIAO ESP32-C3 + external panel)
+pio run -e board-a
+pio run -e board-a -t upload --upload-port COM4
+
 # Board B (reTerminal E1001)
 pio run -e board-b
-
-# Flash to COM5
 pio run -e board-b -t upload --upload-port COM5
 
-# Serial monitor
+# Serial monitor (adjust port as needed)
+pio device monitor -p COM4 -b 115200
 pio device monitor -p COM5 -b 115200
 ```
+
+> **Windows note:** Board A uses the ESP32-C3's native USB. First-time setup requires installing the WinUSB driver for Interface 2 of the JTAG device (VID 303A, PID 1001) via [Zadig](https://zadig.akeo.ie). After that, flashing is automatic — no bootloader button sequence needed.
 
 ## First boot
 
