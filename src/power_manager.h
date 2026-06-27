@@ -1,7 +1,11 @@
 #pragma once
 #include "types.h"
+#include "config.h"
 #include <esp_sleep.h>
 #include <WiFi.h>
+#ifdef BOARD_BUILD_B
+#  include <driver/gpio.h>
+#endif
 
 // ── enterSleep ────────────────────────────────────────────────────────────────
 // Enters the selected power mode for sleepMins minutes.
@@ -21,12 +25,24 @@ inline void enterSleep(PowerMode mode, uint16_t sleepMins) {
 
     if (mode == PowerMode::BATTERY_SAVER) {
         esp_sleep_enable_timer_wakeup(us);
+#ifdef BOARD_BUILD_B
+        // Allow any of the three physical buttons to wake from deep sleep.
+        // Buttons pull the line low when pressed; normal state is high (INPUT_PULLUP).
+        const uint64_t btnMask = (1ULL << BTN_GREEN) | (1ULL << BTN_LEFT) | (1ULL << BTN_RIGHT);
+        esp_sleep_enable_ext1_wakeup(btnMask, ESP_EXT1_WAKEUP_ANY_LOW);
+#endif
         esp_deep_sleep_start();
         // Does not return.
 
     } else {
         // Quick Wake: light sleep with WiFi modem sleep enabled.
         // Configuring modem sleep is required to actually save power (PRD §7).
+#ifdef BOARD_BUILD_B
+        gpio_wakeup_enable((gpio_num_t)BTN_GREEN, GPIO_INTR_LOW_LEVEL);
+        gpio_wakeup_enable((gpio_num_t)BTN_LEFT,  GPIO_INTR_LOW_LEVEL);
+        gpio_wakeup_enable((gpio_num_t)BTN_RIGHT, GPIO_INTR_LOW_LEVEL);
+        esp_sleep_enable_gpio_wakeup();
+#endif
         WiFi.setSleep(WIFI_PS_MAX_MODEM);    // modem sleep between wakes
         esp_sleep_enable_timer_wakeup(us);
         esp_light_sleep_start();

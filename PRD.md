@@ -43,7 +43,18 @@ Full-color refresh on this panel has been observed taking up to ~30 seconds, dra
 - Battery life claims/estimates shown anywhere in the portal UI must be board-specific, not a single shared number, given the 6-hour-reference-interval difference called out above.
 
 ### 2.4 Buttons (all boards)
-RESET restarts firmware as-is. BOOT-hold (confirmed: 4s) is the **sole** trigger for entering Config Mode, on all three boards. All boards have a physical on/off power switch — no soft-power/dual-duty button design needed.
+RESET restarts firmware as-is. All boards have a physical on/off power switch — no soft-power/dual-duty button design needed.
+
+**Board A (XIAO panel):** BOOT-hold (4s) enters Config Mode. BOOT + RESET are exposed on the board.
+
+**Board B (reTerminal E1001):** The E1001 is an enclosed device; BOOT and RESET are not user-accessible. Three physical buttons are exposed instead:
+- **Green button (GPIO3):** short press = force a refresh cycle (wake from sleep, fetch, render); hold 4s = enter Config Mode. Same 4s hold threshold as Board A's BOOT-hold.
+- **Left white button (GPIO5):** rewind the rotation bank one full set and render from cache (no WiFi fetch).
+- **Right white button (GPIO4):** advance the rotation bank one full set and render from cache (no WiFi fetch).
+
+For left/right: the cache render is instant (no WiFi), so the response feels immediate. The device then re-sleeps for the normal refresh interval; the next timed wake does a full WiFi fetch as usual. If no cache exists yet (first cycle after first boot), left/right are no-ops.
+
+**Board C:** TBD — buttons not yet specified.
 
 ### 2.5 Hardware Abstraction Layer (Required Architecture)
 Given three boards share a codebase, the firmware needs a clean separation:
@@ -163,7 +174,9 @@ All pages are normal responsive mobile-web pages served from the ESP32's AP, bui
 SSID + password entry (scan-assisted if feasible, manual entry as fallback), proceeds to Ticker Management.
 
 ### 8.2 Ticker Management
-Add/remove ticker symbols, static vs. rotating designation per ticker, drag-reorder for rotation order, a Data Provider selector (dropdown/choice between Twelve Data and Finnhub — Section 9) with its corresponding API key entry field directly below it (the key field should update its label/helper text based on which provider is selected, e.g. "Enter your Twelve Data API key" vs. "Enter your Finnhub API key"), Rotation Interval (hours+minutes, 15-min floor, inline validation).
+Add/remove ticker symbols, static vs. rotating designation per ticker, up/down arrow buttons per row to reorder (replaces drag-reorder — drag is unreliable on mobile captive portals without HTTPS), a Data Provider selector (dropdown/choice between Twelve Data and Finnhub — Section 9) with its corresponding API key entry field directly below it (the key field should update its label/helper text based on which provider is selected, e.g. "Enter your Twelve Data API key" vs. "Enter your Finnhub API key"), Rotation Interval (hours+minutes, 15-min floor, inline validation).
+
+**Portal pass TODO:** Implement up/down reorder buttons in `portal_html.h`. Current portal has no reorder UI — tickers stay in the order they were added.
 
 ### 8.3 Review & Confirm
 Read-only summary (WiFi SSID only, not password; full ticker list with mode/order). Edit links back to relevant sections. "Save & Restart" CTA.
@@ -234,3 +247,20 @@ These were identified during scoping as needing verification on real hardware/ac
 9. **Confirm Board C's actual achievable refresh time on real hardware** before finalizing the 30-minute recommended floor (Section 2.3.1) — the ~30s figure was a third-party-reported anecdote (a forum/community post), not a datasheet spec; could be better or worse in practice, and may also depend on how much of the screen actually changes between refreshes
 10. ~~**Confirm whether the same captive portal/WiFi/NVS code truly runs unmodified across ESP32-C3 (Board A) and ESP32-S3 (Boards B/C)**~~ **Resolved:** confirmed. Both boards share the same portal, WiFi, and NVS code with no platform-specific branches required.
 11. Decide whether Board C's color semantic mapping (red/green for loss/gain) should be user-configurable (e.g. for colorblind accessibility, some users might prefer different color pairs) or hardcoded — not raised before since it didn't exist before Board C; flagging now rather than assuming
+
+## 12. Feature Ideas / Deferred Work
+
+### 12.1 Battery level indicator (Board B)
+
+The reTerminal E1001 has an internal Li-ion battery. Surface its charge state on the ePaper display so the user knows when the device needs charging before the display simply goes dark.
+
+**Options (low → high fidelity):**
+- **Simple icon in the footer**: a small battery outline (e.g. 20×10px) with fill level proportional to charge percentage. Rendered in the footer bar alongside the "last updated" timestamp. Four fill levels (full / 75% / 50% / low) is enough resolution for a monochrome icon. Low battery could render in a warning-indicating style or with an "!" glyph.
+- **Percent label**: numeric `"BAT 73%"` string alongside or instead of the icon, using the existing 9pt font.
+- **Low-battery warning screen**: below ~10%, render a dedicated low-battery screen on the next wake instead of the market overview, similar to `drawWifiUnavailable`. Prompts the user to charge before the device powers off.
+
+**Implementation notes:**
+- The E1001 exposes battery voltage/percentage via I²C (MAX17048 or compatible fuel gauge, part confirmed on the E1001 schematic). Read charge percentage in `runNormalMode` before rendering, pass it to the renderer.
+- Board A has no battery management circuit — the battery indicator is Board B-only and should be `#ifdef BOARD_BUILD_B` gated.
+- The renderer change is additive: `drawMarketOverview` could accept an optional `int8_t battPct` argument (-1 = not available) and render the icon only when ≥ 0.
+- No new PlatformIO library needed if reading MAX17048 via raw I²C (`Wire`); ask before adding any fuel-gauge library.

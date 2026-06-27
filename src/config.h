@@ -30,6 +30,16 @@
 // PRD §2.4 / §11 item 5 — confirmed 4 s
 #define BOOT_HOLD_MS              4000
 
+// Board B (reTerminal E1001) physical buttons.
+// Buttons are active-low; firmware enables INPUT_PULLUP.
+// GPIO3/4/5 are the ePaper SPI pins on Board A, but Board B uses GPIO10–13 for
+// ePaper, so there is no conflict.
+#ifdef BOARD_BUILD_B
+#  define BTN_GREEN  3   // green button: short press = force refresh, hold 4s = config mode
+#  define BTN_LEFT   5   // left white button: rewind rotation bank one full set
+#  define BTN_RIGHT  4   // right white button: advance rotation bank one full set
+#endif
+
 // ── Intervals & limits ────────────────────────────────────────────────────────
 #define DEFAULT_ROT_INTERVAL_MIN  30
 #define DEFAULT_REF_INTERVAL_MIN  60

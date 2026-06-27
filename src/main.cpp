@@ -21,9 +21,11 @@ static WiFiManager wifiMgr;
 // BOOT_HOLD_MS at startup. Checked before anything else (PRD §2.4).
 static bool bootHeld() {
 #if defined(BOARD_BUILD_A)
-    const int BOOT_PIN = 9;   // GPIO9 = BOOT on XIAO ESP32-C3
+    const int BOOT_PIN = 9;          // GPIO9 = BOOT on XIAO ESP32-C3
+#elif defined(BOARD_BUILD_B)
+    const int BOOT_PIN = BTN_GREEN;  // green button doubles as config-hold on E1001
 #else
-    const int BOOT_PIN = 0;   // GPIO0 = BOOT on XIAO ESP32-S3
+    const int BOOT_PIN = 0;
 #endif
     pinMode(BOOT_PIN, INPUT_PULLUP);
     if (digitalRead(BOOT_PIN) != LOW) return false;
@@ -136,6 +138,43 @@ static uint8_t buildDisplaySet(const DeviceConfig& cfg,
     return rowCount;
 }
 
+// ── Button navigation helpers (Board B) ──────────────────────────────────────
+#ifdef BOARD_BUILD_B
+
+// Total tickers in the rotation bank and how many rotating slots appear in the
+// top-5 visible positions (bankUsed). Needed to compute step sizes for LEFT/RIGHT.
+static void calcBankParams(const DeviceConfig& cfg, uint8_t* bankSize, uint8_t* bankUsed) {
+    *bankSize = 0;
+    for (uint8_t i = 0; i < cfg.tickerCount; i++) {
+        if (i >= 5 || cfg.tickers[i].mode == TickerMode::ROTATING) (*bankSize)++;
+    }
+    *bankUsed = 0;
+    uint8_t slots = min(cfg.tickerCount, (uint8_t)5);
+    for (uint8_t i = 0; i < slots; i++) {
+        if (cfg.tickers[i].mode == TickerMode::ROTATING) (*bankUsed)++;
+    }
+}
+
+// Render the ticker set starting at renderPos from the NVS cache (no WiFi fetch).
+// Advances and persists rotPos via NVS. Returns false if the cache is empty.
+static bool renderCachedAtPos(IDisplay* display, const DeviceConfig& cfg,
+                               uint8_t renderPos) {
+    CachedTickerSet cache;
+    nvs.loadCache(cache);
+    if (cache.count == 0) return false;
+
+    TickerData displaySet[5] = {};
+    uint8_t    nextRotPos    = 0;
+    uint8_t    count = buildDisplaySet(cfg, cache, displaySet, renderPos, &nextRotPos);
+
+    IndexData indices[3] = {};  // no live index data available from cache
+    display->drawMarketOverview(indices, displaySet, count, cache.fetchedAt);
+    nvs.setRotPosition(nextRotPos);
+    return true;
+}
+
+#endif  // BOARD_BUILD_B
+
 // ── Fetch all tickers ─────────────────────────────────────────────────────────
 // Returns true if at least one ticker fetched successfully.
 // On 429, sets *rateLimited = true.
@@ -186,6 +225,50 @@ static bool fetchAllTickers(IDataProvider* provider, const DeviceConfig& cfg,
 static void runNormalMode(DeviceConfig& cfg) {
     IDisplay* display = createDisplay(cfg.boardTarget, cfg.panelVariant);
     display->init();
+
+#ifdef BOARD_BUILD_B
+    // Enable pull-ups on all three physical buttons.
+    pinMode(BTN_GREEN, INPUT_PULLUP);
+    pinMode(BTN_LEFT,  INPUT_PULLUP);
+    pinMode(BTN_RIGHT, INPUT_PULLUP);
+
+    // Handle deep-sleep wakeup from a navigation button (left or right).
+    // Render the cached data at the requested position and go back to sleep;
+    // skip WiFi and fetching entirely so the response feels instant.
+    // A green-button wakeup falls through and triggers a normal fetch cycle.
+    if (cfg.powerMode == PowerMode::BATTERY_SAVER &&
+        esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
+        uint64_t pins = esp_sleep_get_ext1_wakeup_status();
+        bool leftWoke  = (pins & (1ULL << BTN_LEFT))  != 0;
+        bool rightWoke = (pins & (1ULL << BTN_RIGHT)) != 0;
+
+        if (leftWoke || rightWoke) {
+            uint8_t bSize = 0, bUsed = 0;
+            calcBankParams(cfg, &bSize, &bUsed);
+            if (bSize > 0 && bUsed > 0) {
+                uint8_t curPos = nvs.getRotPosition();
+                uint8_t renderPos;
+                if (rightWoke) {
+                    // curPos is the position queued for the next fetch cycle —
+                    // that is exactly the set to show for a "next" navigation.
+                    renderPos = curPos;
+                } else {
+                    // curPos is 1 set ahead of what is currently on screen.
+                    // To show the previous set, step back 2 sets from curPos.
+                    int offset = (2 * (int)bUsed) % (int)bSize;
+                    renderPos  = (uint8_t)(((int)curPos - offset + (int)bSize * 2) % (int)bSize);
+                }
+                renderCachedAtPos(display, cfg, renderPos);
+            }
+            Serial.printf("[Button] %s — rendered from cache, re-sleeping %d min\n",
+                          rightWoke ? "RIGHT" : "LEFT", cfg.refIntervalMin);
+            enterSleep(cfg.powerMode, cfg.refIntervalMin);
+            // Does not return (deep sleep).
+        }
+        // Green button: fall through to the normal fetch cycle below.
+        Serial.println("[Button] GREEN — forcing refresh cycle");
+    }
+#endif
 
     while (true) {
         uint16_t sleepMins = cfg.refIntervalMin;
@@ -267,6 +350,37 @@ static void runNormalMode(DeviceConfig& cfg) {
         // BATTERY_SAVER: never reaches here (deep sleep = full reset).
         // QUICK_WAKE:    continues here after light sleep, loops for next cycle.
 
+#ifdef BOARD_BUILD_B
+        // If a navigation button woke us from light sleep, render from cache
+        // and go back to sleep without doing a WiFi fetch.
+        if (cfg.powerMode == PowerMode::QUICK_WAKE &&
+            esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) {
+            delay(30);  // debounce
+            bool leftPressed  = (digitalRead(BTN_LEFT)  == LOW);
+            bool rightPressed = (digitalRead(BTN_RIGHT) == LOW);
+            if (leftPressed || rightPressed) {
+                uint8_t bSize = 0, bUsed = 0;
+                calcBankParams(cfg, &bSize, &bUsed);
+                if (bSize > 0 && bUsed > 0) {
+                    uint8_t curPos = nvs.getRotPosition();
+                    uint8_t renderPos;
+                    if (rightPressed) {
+                        renderPos = curPos;
+                    } else {
+                        int offset = (2 * (int)bUsed) % (int)bSize;
+                        renderPos  = (uint8_t)(((int)curPos - offset + (int)bSize * 2) % (int)bSize);
+                    }
+                    renderCachedAtPos(display, cfg, renderPos);
+                }
+                Serial.printf("[Button] %s — rendered from cache, re-sleeping %d min\n",
+                              rightPressed ? "RIGHT" : "LEFT", cfg.refIntervalMin);
+                enterSleep(cfg.powerMode, cfg.refIntervalMin);
+                // Returns here after the follow-up light sleep; continues to display->init() below.
+            }
+            // Green button or unrecognised GPIO: fall through to normal fetch cycle.
+        }
+#endif
+
         // Reinit display and reload config for next Quick Wake cycle.
         // Note: boardTarget/panelVariant changes from a mid-session reconfigure won't
         // take effect here — those require a restart (which reconfigure always triggers).
@@ -285,7 +399,15 @@ void setup() {
     Serial.println("\n[Boot] ePaper Stock Ticker starting");
 
     // ── BOOT-hold check (PRD §2.4) ────────────────────────────────────────
+    // On Board B, skip the hold check when waking from a deep-sleep button press.
+    // The green button hold for config is only meaningful on a fresh power-on, not
+    // on a navigation wake where the user may still have the button briefly depressed.
+#ifdef BOARD_BUILD_B
+    bool forceConfig = (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_EXT1)
+                       && bootHeld();
+#else
     bool forceConfig = bootHeld();
+#endif
 
     // ── Load config ───────────────────────────────────────────────────────
     DeviceConfig cfg = {};

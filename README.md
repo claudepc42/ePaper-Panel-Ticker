@@ -15,6 +15,7 @@ An ESP32 firmware that turns a 7.5" ePaper display into an always-on stock ticke
 - **Rotation bank** — up to 5 ticker rows on screen at once; individual rows can rotate through a bank of additional tickers each refresh cycle
 - **NVS persistence** — config and data cache survive power cycles
 - **Graceful degradation** — shows cached data if WiFi or the API is unavailable
+- **Hardware buttons (Board B)** — green button forces a refresh or holds 4s to enter config mode; left/right white buttons cycle the rotation bank instantly from cache without a WiFi fetch
 
 ## Hardware
 
